@@ -1,0 +1,652 @@
+---
+title: "Wine Type Prediction With Supervised And Unsupervised Learning"
+author: "Biljana Simonovikj"
+date: "06/05/2020"
+output: 
+  html_document:
+    code_folding: hide
+  word_document: default
+  pdf_document: default
+bibliography: references.bib
+link-citations: yes
+---
+
+```{r setup, include=FALSE}
+#------------------------------------------------------
+# Install and load the liberaries used in this project:
+#------------------------------------------------------
+library(GGally)
+library(gridExtra)
+library(RColorBrewer)
+library(factoextra)
+library(FactoMineR)
+library(corrplot)
+library(caret)
+library(pander)
+library(reshape2)
+library(mlbench)
+library(dbscan)
+library(dplyr)
+library(stats)
+library(graphics)
+library(reshape)
+library(naivebayes)
+library(tidyverse)
+library(dendextend)
+library(MASS)
+library(ggpubr)
+library(bibtex)
+library(knitr)
+library(rmarkdown)
+library(rsconnect)
+
+```
+
+```{r, out.width = "90%", fig.align = "center"}
+# Add an image
+knitr::include_graphics('/Users/Biljana/Datasets/Data 7/analytics_wine.jpg')
+```
+
+<p>&nbsp;</p>
+### Abstract
+<p>&nbsp;</p>
+
+This study explores the usage of R programming to predict the wine type with unsupervised learning (PCA and hierarchical agglomerative clustering) and supervised learning (naive_Bayes, LDA and QDA) on benchmark wine database called "Wine Quality" comprised of two datasets for red and white wine of Vinho Verde that were joined together for our analysis. Study data consists of 11 predictor variables as chemical concentrations of physicochemical parameters of laboratory tests of wine data and a newly created class label called wine type for red and white wine. Prediction of wine type is basically a two-class classification problem. Hierarchical clustering on Principal Components could be applied as an effective technique for its solution. This study considers PCA to be an efficient technique in finding hiden patterns in data, in reducing the dimensionality by removing outliers and redundancy, and in identifying the most correlated variables. Only three Principal Components whose eigenvalues exceeded 1 and whose cumulative proportion of variance was approximately 64.36% of total variance, were sufficiently enough to reconstruct the cluster structure with prominent clusters differentiation of Ward's 2 dendrogram according to the ground truth class labels. Mastering the challenge of imbalanced class labels with post-hoc approach of down sampling, facilitated mostly supervised classification techniques to be considered as valuable assets. Metrics for evaluating classification model performances revealed that LDA has the highest accuracy of 0.99 on test data, next is QDA with 0.97 and last is naive_Bayes with 0.96. QDA has the highest sensitivity of 0.99 on train data, while all of the models exhibited prevalence of 0.50 of positive class, "red" type.
+
+<p>&nbsp;</p>
+### Introduction
+<p>&nbsp;</p>
+Data mining is one of the cruical steps in the whole lifecycle of data called Knowledge Discovery in Databases (KDD) process. It refers to a collection of mathematical and computational methods and techniques to extract models and patterns for predictive and descriptive purposes, relying heavily on automated analysis methods that can handle large amounts of data (@dalpiaz2017r). The most common predictive tasks in data mining, regression and classification, are imperative for decision making. In addition, the most common descriptive tasks, clustering, outlier detection and frequent pattern mining, are efficient in discovering interesting  patterns in data (@james2013introduction).
+
+Vinho Verde is not a grape variety, but it is a product of DOC (The denominação de origem controlada), system of protected designation of origin for wines, as such, it is a unique product in the Minho (northwest) region of Portugal (@joharanalyzing). The goal of this study is focused on predicting wine types of Vinho Verde into two classes “red” or “white” according to characteristics of variables that are describing physicochemical properties of the wine by supervised and unsupervised data mining approaches while addressing the classification problem with class imbalance of categorical response variable (@CorCer09). The first objective of this study is to demonstrate the ability of principal component analysis (PCA) to find the best lower representation of the multivariate data relevant to build the cluster structure by applying hierarchical agglomerative methods of clustering. Concerning model performance accuracy, the second objective is to train supervised generative classification models using train and test wine data with an intention to distinguish fundamental variables with the highest impact on whether a wine type is "red" or "white". 
+
+<p>&nbsp;</p>
+#### Data
+<p>&nbsp;</p>
+(i) The source of the data is UCI Maschine Learning Repository, https://archive.ics.uci.edu/ml/datasets/Wine+Quality.
+(ii) The dataset of interest, called "Wine Quality", is result of experimental study accomplished by pre-processing of protected designation of origin wine samples produced according to Vinho Verde system, collected from May/2004 to February/2007 with a computerized program (iLab) that automatically computes sample testing results, (laboratory and sensory), at official certification entity (CVRVV) in Portugal. The generated dataset contsists of 11 variables (parameters of laboratory tests) without missing values and very unbalanced output variable called "quality", result of sensory test analysis. Originally, it was divided into two datasets for red and white wine, accordingly, that were exploited for classification study conducted by Paolo Cortez in (@cortez2009modeling) and donated to UCI MLR.
+(iii) The sample size is 1599 rows for red and 4898 rows for white wine.
+(iv) Both datasets contain 11 identical input variables and 1 output/response variable. Input variables are continuous/measure and output variable is polytomous, categorical (ordinal) with 6 levels (3, 4, 5, 6, 7 and 8) in red wine dataset and 7 levels (3, 4, 5, 6, 7, 8 and 9) in white wine dataset (Table 1).  
+```{r, results='asis', echo=TRUE}
+#=======================
+# Create metadata table:
+#========================
+# First, we assign the columns: row_id, var_names, type, class and description, define the column names and 
+#connect them into dataframe that is converted into table with pander package:
+row_id <- c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, "Output", 1)
+var_names <- c("fixed.acidity", "volatile.acidity", "citric.acid", "residual.sugar", "chlorides", 
+               "free.sulfur.dioxide", "total.sulfur.dioxide", "density", "pH", "sulphates", 
+                "alcohol", "Name", "quality")
+type <- c("continuous","continuous","continuous","continuous","continuous","continuous",
+          "continuous","continuous", "continuous","continuous", "continuous", "Type", 
+           "categorical")
+class <- c("measure", "measure", "measure", "measure", "measure", "measure", "measure", 
+           "measure", "measure", "measure", "measure", "Class", "category")
+description <- c("acidity concentration, (tartaric acid) g/dm3", "volatile acidity concentraion, g/dm3",
+                "citric acid concentration, g/dm3", "residual sugar concentration, g/dm3", 
+                "chlorides concentration, g/dm3", "free sulfur dioxide concentration, mg/dm3", 
+                "total sulfur dioxide concentration, mg/dm3", "density concentration, g/dm3",
+                "estimation of pH level", "sulphates concentration, g/dm3", 
+                "alcohol percentage in absolute units", "Description", 
+                "score of wine quality between 0 and 10")
+ col_names <- c("Input", "Name", "Type", "Class", "Description")
+ metadata_df <- cbind(row_id, var_names, type, class, description)
+ colnames(metadata_df) <- col_names
+ set.alignment("left", row.names = "left")
+ pander(metadata_df, style = 'rmarkdown',
+        caption = "Data dictionary for red and white wine datasets", split.table = Inf)
+```
+
+```{r, results = "hide"}
+#---------------------------------------
+# Download and import the datasets
+#---------------------------------------
+red_wine <- read.csv(file = "/Users/Biljana/Datasets/Data 7/winequality-red.csv", sep = ";", header = T)
+white_wine <- read.csv(file = "/Users/Biljana/Datasets/Data 7/winequality-white.csv", sep = ";", header = T)
+# dim(red_wine) # retrieve dimensions of the data frame
+# dim(white_wine) # retrieve dimensions of the data frame
+
+# Introduce new variable wine_type:
+#----------------------------------
+red_wine$wine_type = rep("red", nrow(red_wine))
+white_wine$wine_type = rep("white", nrow(white_wine))
+
+# Connect two datasets:
+#-------------------------
+wine_data <- rbind(red_wine, white_wine)
+# summary(wine_data) # summary statistics of the variables
+str(wine_data) # compactly display the structure of an arbitrary R object
+ map_dbl(wine_data, function(.x) {sum(is.na(.x))}) # determine the number of missing values in each variable
+
+# Define column names:
+#--------------------
+column_names <- c("fixed_acidity", "volatile_acidity", "citric_acid",
+                  "residual_sugar", "chlorides", "free_sulfur_dioxide",
+                  "total_sulfur_dioxide", "density", "pH",
+                  "sulphates", "alcohol", "quality", "wine_type")
+
+colnames(wine_data) <- column_names # apply column names
+
+# Remove quality variable from the dataset:
+#------------------------------------------
+wine_data <- wine_data[ ,-12] 
+```
+(v) Preparing data for analysis: a) changing column names of the variables (fixed.acidity, volatile.acidity, citric.acid, residual.sugar and free.sulfur.dioxide by replacing symbol dot, (.) with underscore, (_) in both datasets; b) introducing new class label ("wine_type"), categorical (nominal), to each dataset with *rep()* by rows with labels "red" and "white"; c) joining "red" and "wine" datasets with *rbind()* by rows into united dataset called "wine_data"; d) removing "quality" variable from "wine_data" by column number because our analysis is focused only on "wine_type" class label. 
+```{r, results="hide"}
+# Challange with unbalanced class label:
+#======================================
+'%ni%' <- Negate('%in%') # define "not in" function
+options(scipen = 999) # prevent printing scientific notations
+
+# Down sample of class label:
+#---------------------------
+set.seed(0)
+data_class_balance <- downSample(x = wine_data[, colnames(wine_data) %ni% factor(wine_data$wine_type)],
+                                  y = factor(wine_data$wine_type))
+data_class_balance <- data_class_balance[ ,-13] # removing the extra class variable created
+wine_classe <- data_class_balance[ ,-c(1:11)] # select the class label column
+wine_predictors <- data_class_balance[ ,1:11] # select predictor variables by column number
+# summary(wine_predictors) # statistical summary of wine predictors
+wine_classe <- data_class_balance$wine_type # assign the class label
+
+# Define categorical class label as a factor with 2 levels: "red" and "white"
+wine_classe <- factor(data_class_balance$wine_type, levels = c("red","white"), ordered = FALSE)
+# Equal distribution of red and white samples in training data subset:
+#--------------------------------------------------------------------
+ table(wine_classe)
+```
+(vi) Pre-processing interventions before unsupervised learning: a) balancing class frequencies of "wine_type" class label with *downSample()* from caret package (@JSSv028i05); b) separating the predictors (variables 1 to 11) from the class label (variable 12), and converting categorial class label variable into factor variable now called "wine_classe" with two class levels ("red" and "white"). 
+```{r}
+# Normalization of the dataset:
+#==============================
+wine_predictors_scaled <- scale(wine_predictors)
+wine_data_scaled <- cbind(wine_predictors, wine_classe) # connect the predictors with class label
+wine_data_scaled$wine_classe <- factor(wine_data_scaled$wine_classe, levels = c("red","white"), ordered = FALSE) # assigning class label as factor
+#=================================================================
+# Split the data into train and test set according to caret package
+#==================================================================
+set.seed(0)
+train_data_index <- createDataPartition(y = wine_data_scaled$wine_classe,
+                                        p = 0.80,
+                                        list = FALSE)
+# Train and test sets for wine type:
+#----------------------------------
+test_set <- wine_data_scaled[-train_data_index, ]
+train_set <- wine_data_scaled[train_data_index, ]
+wine_class <- factor(train_set$wine_classe, levels = c("red","white"), ordered = FALSE)
+```
+
+```{r, results = "hide"}
+# Class distribution of train data:
+#---------------------------------
+table(wine_class)
+```
+
+```{r, fig.cap="Exploratory Analysis of Train Data"}
+#===================================
+# Exploratory Analysis of Train Data:
+#===================================
+fixed_acidity <- train_set$fixed_acidity
+volatile_acidity <- train_set$volatile_acidity
+citric_acid <- train_set$citric_acid
+residual_sugar <- train_set$residual_sugar
+chlorides <- train_set$chlorides
+free_sulfur_dioxide <- train_set$free_sulfur_dioxide
+total_sulfur_dioxide <- train_set$total_sulfur_dioxide
+density <- train_set$density
+pH <- train_set$pH
+sulphates <- train_set$sulphates
+alcohol <- train_set$alcohol
+
+# Feature plots of training dataset:
+#-----------------------------------
+caret::featurePlot(x = train_set[ ,c("fixed_acidity", "volatile_acidity", "citric_acid", "residual_sugar", "chlorides",
+                                     "free_sulfur_dioxide", "total_sulfur_dioxide", "density", 
+                                     "pH", "sulphates","alcohol")], y = train_set$wine_classe,
+                  plot = "density", scales = list(x = list(relation = "free"),
+                  y = list(relation = "free")),
+                  adjust = 1.5,pch = "|",layout = c(3,4),auto.key = list(columns = 2))
+```
+(vii) Pre-processing interventions before supervised learning: a) z-score normalization by columns of predictor variables, where each column is rescaled to have zero mean and standard deviation 1; b) test-train random split of the "wine_data" using caret package *createDataPartition()* function into 80% for training and 20% for testing; c) balancing class frequencies of training data only with *downSample()* from caret package; d) visually exploring correlations of training data with *ggcorr()* from GGally package (@schloerke2011ggally), checking normality of each variable with *ggqqplot()* from ggpbur package (@kassambara2017ggpubr) and feature exploratory analysis with *featurePlot()* along with plot type arguments: "box", "ellipse" and "density" from caret package; e) predictor variables (free sulfur dioxide and total sulfur dioxide) were excluded from classification analysis because of strong positive correlations and the rest of the variables were kept.
+```{r, results="hide", fig.show='hide', fig.cap="Exploratory Analysis of Train Data"}
+caret::featurePlot(train_set[ ,c("fixed_acidity", "volatile_acidity", "citric_acid", "residual_sugar", "chlorides",
+                                 "free_sulfur_dioxide", "total_sulfur_dioxide", "density", 
+                                 "pH", "sulphates","alcohol")], y = train_set$wine_classe,
+                                   plot = "ellipse",auto.key = list(columns = 2))
+
+caret::featurePlot(train_set[ ,c("fixed_acidity", "volatile_acidity", "citric_acid", "residual_sugar", "chlorides",
+                                 "free_sulfur_dioxide", "total_sulfur_dioxide", "density", 
+                                 "pH", "sulphates","alcohol")], y = train_set$wine_classe,
+                   plot = "box", scales = list(y = list(relation = "free"), x = list(rot = 90)), layout = c(4,3))
+```
+
+```{r, fig.cap="Correlation Plot of Train Data", out.width = "90%", fig.align = "center"}
+# Visually explore correlations of training data subset  - Correlation plot:
+#============================================================================
+ggcorr(train_set[ , -12], label = TRUE, hjust = .85, size = 3, color = "grey50", layout.exp = 2)
+```
+
+```{r, fig.show = "hide", fig.cap="Q-Q Plots of Train Data"}
+# Check normality of training dataset - QQ - plots:
+#==================================================
+plot_1 <- ggqqplot(train_set, title = "NORMAL Q-Q PLOT", x = "fixed_acidity", color = c("#00AFBB"), y = "fixed_acidity")
+
+plot_2 <- ggqqplot(train_set, title = "NORMAL Q-Q PLOT", x = "volatile_acidity", color = c("#00AFBB"), y = "volatile_acidity")
+
+plot_3 <- ggqqplot(train_set, title = "NORMAL Q-Q PLOT", x = "citric_acid", color = c("#00AFBB"), y = "citric_acid")
+
+plot_4 <- ggqqplot(train_set, title = "NORMAL Q-Q PLOT", x = "residual_sugar", color = c("#00AFBB"), y = "residual_sugar")
+
+plot_5 <- ggqqplot(train_set, title = "NORMAL Q-Q PLOT", x = "chlorides", color = c("#00AFBB"), y = "chlorides")
+
+plot_6 <- ggqqplot(train_set, title = "NORMAL Q-Q PLOT", x = "free_sulfur_dioxide", color = c("#00AFBB"), y = "alcohol")
+
+plot_7 <- ggqqplot(train_set, title = "NORMAL Q-Q PLOT", x = "total_sulfur_dioxide", color = c("#00AFBB"), y = "alcohol")
+
+plot_8 <- ggqqplot(train_set, title = "NORMAL Q-Q PLOT", x = "density", color = c("#00AFBB"), y = "density")
+
+plot_9 <- ggqqplot(train_set, title = "NORMAL Q-Q PLOT", x = "pH", color = c("#00AFBB"), y = "pH")
+
+plot_10 <- ggqqplot(train_set, title = "NORMAL Q-Q PLOT", x = "sulphates", color = c("#00AFBB"), y = "sulphates")
+
+plot_11 <- ggqqplot(train_set, title = "NORMAL Q-Q PLOT", x = "alcohol", color = c("#00AFBB"), y = "alcohol")
+
+grid.arrange(plot_1, plot_2, plot_3, plot_4, plot_5, plot_6, plot_7, plot_8, plot_9, plot_10, plot_11, ncol = 3) # side-by-side Q-Q plots
+```
+
+```{r}
+# Removing Sulphur Dioxide and Total Sulphur Dioxide:
+#====================================================
+train_set <- train_set[ ,-c(6:7)]
+test_set <- test_set[ , -c(6:7)]
+```
+(vii) Any other interventions: the class frequencies of testing data were left with the state of nature and reflected the imbalance so that honest estimates of future performance of classifiers can be computed.
+
+### Methods
+
+Data treatment and computing performance metrics of data mining algorithms were performed using R Studio (R version 3.6.2, 2019).
+
+**Principal Component Analysis (PCA)**: operates in an unsupervised manner as a dimensionality reduction procedure when we want to find a low-dimensional representation of the multivariate data and plot the observations in this low-dimensional space. Each of the n-observations in the dataset lives in p-dimensional space and each variable could be considered as a different p dimension. For p-dimensional datasets where p>3, it could be very difficult to visualize a multi-dimensional hyperspace. Therefore, we wish to develop a smaller number of artificial variables (called principal components) that will account for most of the variance in the observed variables that may be used as criterion variables in subsequent analyses. These new variables are a linear combination of the original p variables. The amount of variance retained by each principal component is measured by the so-called eigenvalue. The first principal component extracted accounts for a maximal amount of total variance in the observed variables. The second principal component will have two important features: a) it accounts for a maximal amount of variance in the dataset that was not accounted for by the first component and it will be correlated with some of the variables that did not display strong correlations with the first component; b) second feature is that it will be uncorrelated with the first component. In general, the main purpose of PCA is to: a) identify hidden patterns in a dataset; b) reduce the dimensionality of the data by removing the noise and redundancy in the data; c) identify correlated variables, d) data visualisation with corresponding 2D or 3D plots (@notionsprincipal).
+```{r, results = "hide"}
+#==========================================================
+# PCA Component Analysis
+#===========================================================
+# Applying PCA to 11-dimensional space of predictor variables:
+#===========================================================
+pca_wine <- prcomp(wine_predictors, scale = TRUE, center = TRUE) # apply prcomp() from stats package
+
+# Inspect PCA results with get_eigenvalue() from factoextra package:
+#------------------------------------------------------------------
+get_eigenvalue(pca_wine) # get eigenvalues, variance and cummulative variance
+eig <- get_eigenvalue(pca_wine) # assign PCA results into a variable
+df_eig  <- data.frame(eigenvalue = eig[ ,1], variance = eig[ ,2], cumvariance = eig[ ,3]) # create a dataframe
+pcs <- c("PC1","PC2","PC3","PC4","PC5","PC6", "PC7", "PC8", "PC9", "PC10", "PC11") # create a vector of PCs names
+eig_df <- cbind(pcs, df_eig) # connect to the datafame
+column_names <- c("PCs", "Eigenvalue", "Variance %", "Cummulative Variance %") # define column names
+colnames(eig_df) <- column_names # set column names
+```
+
+```{r}
+# Present the PCA results in a tabular form:
+#------------------------------------------
+# Present the table with pander package:
+pander(eig_df, style = 'rmarkdown',
+                      caption = "Proportion of variance explained (PVE) and accumulated sum of proportion
+       of variance for each of the eleven principal components.", split.table = Inf)
+```
+
+
+```{r, results = "hide"}
+# Extract the results for variables from the PCA output:
+#------------------------------------------------------
+(var <- get_pca_var(pca_wine)) # assign the results in a variable
+var$coord # extract coordinates (loadings) of the variables
+var$contrib # extract variables contribution
+var$cos2 # extract quality of representaion of the variables on factor map
+
+# Create dataframe of loadings of variables to first 2 Principal Components:
+#----------------------------------------------------------------------------
+loading_var <- var$coord # loading of the variables
+loading_var <-  as.data.frame(loading_var) # assign as dataframe
+loading_var <- loading_var[ , 1:2] # isloate loading on the first two PCs
+col_names <- c("PC1", "PC2") # define row names
+colnames(loading_var) <- col_names # set row names
+# Present the table with pander package:
+pander(loading_var, style = 'rmarkdown',
+        caption = "Variable loadings (coordinates) on Principal Components 1 and 2.", split.table = Inf)
+```
+
+PCA was performed with *pcomb()* from stats package, (@R-base) that automatically standardizes the predictors data that was useful because they are expressed in different units (from mg to g, Table 1). The rest of the analysis was performed with functions from factoextra package (@kassambara2017package). The eigenvalues and the proportion of variances retained by the principal components were extracted by *get_eigenvalue()*, while PCA results for each variable were extracted from *get_pca_var()*, where variable coordinates, variable contribution and square cosine were analyzed separately. The analysis was supported with correaltion variable plot with components 1 and 2 obtained with *fviz_pca_biplot()* (Fig 1). In addition, the most contributing variables to the principal components and the quality of representation of all variables (square cosine) on factor map were highlighted with correlation plots obtained with *corrplot()* (Fig 2 and Fig 3).
+```{r, results = "hide"}
+# Hierachical Clustering:
+#========================
+# Create a data frame of first 3 PCA components:
+pca_3 = data.frame(pca_wine$x[, 1:3])
+
+pc_1 <- pca_3$pc_1 # assign PC1
+pc_2 <- pca_3$pc_2 # assign PC2
+pc_3 <- pca_3$pc_3 # assign PC3
+
+wine_matrix <- dist(pca_3, method = "euclidean", diag = FALSE, upper = FALSE, p = 2) # distance matrix computation of class "dist" object by using the specified distance measure (euclidean) that computes the dissimilarity distances between the rows of a data matrix
+head(as.matrix(wine_matrix)) # conversion to conventional distance matrix
+```
+
+
+```{r}
+
+# Use the distance matrix as input to call the Single-Linkage clustering algorithm, Complete-Linkage, Average-Linkage and Ward's 2 available from the base R package stats and compute the dissimilarity matrix:
+#=========================================================================================================
+wine_sl <- hclust(wine_matrix, method = "single") 
+# hierarchical cluster analysis with the Single-Linkage clustering algorithm
+wine_cl <- hclust(wine_matrix, method = "complete") 
+# hierarchical cluster analysis with the Complete-Linkage clustering algorithm
+wine_al <- hclust(wine_matrix, method = "average") 
+# hierarchical cluster analysis with the Average-Linkage clustering algorithm
+wine_wl <- hclust(wine_matrix, method = "ward.D2") 
+# hierarchical cluster analysis with Ward’s clustering algorithm
+```
+
+**Hirearchical agglomerative clustering, (HAC):** is also unsupervised data mining approach that is best explained by describing the algorithm that begins with a number of clusters equal to the number of observations (a singleton) that are merging in an iterative way according to a given dissimilarity measure between clusters, until there is only one cluster left that represents the entire dataset. The grouping process is visualized with resulting tree-like structure (a dendrogram) that is treated as a single object in all subsequent steps. HAC was performed by utlizing *hclust()* from stats package that provides several methods: single linkage, complete linkage, average linkage, and Ward's minimum variance. The single linkage method computes minimal inter-cluster dissimilarity or specifically, computes all pairwise dissimilarities between the observations in one cluster and the observations in another cluster, and records the smallest of these dissimilarities. The complete linkage method finds similar clusters by computing maximal inter-cluster dissimilarity and records the largest of these dissimilarities while the average linkage method computes mean inter-cluster dissimilarities (@kaufman725pj). Particularly, it computes all pairwise dissimilarities between the observations in one cluster and the observations in another cluster, and records the average of these dissimilarities. The Ward’s error sum of squares hierarchical clustering method was first published by Joe Ward (@ward1963hierarchical). Two algorithms are implementing Ward’s clustering method: Ward 1 described by Murtagh Fionn (@murtagh1985multidimensional) and Ward 2 described in (@kaufman1990partitioning). When applied to the same distance matrix, they produce different results. It was shown that Ward 2 algorithm preserves the Ward's criterion from 1963 (@murtagh2014ward) where the dissimilarities are squared before cluster updating. It is also call a Ward's minimum variance method and note that it requires a squared Euclidean distance matrix.
+
+A dataframe comprising of only first three principal components generated in the previous activity as an output of *get_eigenvalue()* was used for computation of distance or dissimilarity matrix by applying *dist()* from stats package, launch to measure "euclidean" that reurns the distances between the rows of a data matrix. After computing the distance matrix, we started with the default methods: single, average, complete and Ward’s 2 methods and proceeded to plot the graphs. Coloured dendrogram with prominent clusters that correspond the best to the two classes of the class label, was visualized with coloured class labels and coloured branches with constructs of code from dendextend package (@R-dendextend). Readjusted class frequencies of class label (wine_classe) variable were used for plotting the dendrogram with *downSample()* as described in Data section.
+<p>&nbsp;</p>
+**Supervised Classification - Generative Models:**
+<p>&nbsp;</p>
+
+<p>&nbsp;</p>
+**a) naïve_Bayes Model**
+<p>&nbsp;</p>
+```{r}
+
+# Build Naive_Bayes Model:
+#=========================
+nb_fit = naive_bayes(train_set$wine_classe~ fixed_acidity + volatile_acidity  +
+                       residual_sugar + density +
+                       pH + alcohol + sulphates + citric_acid + chlorides, train_set[ ,-10])
+nb_fit
+```
+<p>&nbsp;</p>
+**Measures of predicted classes for NB model on training data**
+<p>&nbsp;</p>
+```{r}
+# Measures of predicted classes for NB model on training data:
+#============================================================
+head(predict(nb_fit, data = train_set[ ,-10], type = "prob"))
+predmodel_train_nb = predict(nb_fit, data = train_set[ ,-10], type = "class")
+table(predicted = predmodel_train_nb, observed = train_set$wine_classe)
+confusionMatrix(predmodel_train_nb, train_set$wine_classe,
+                mode = "everything", positive = "red")
+```
+<p>&nbsp;</p>
+**Measures of predicted classes for NB model on testing data**
+<p>&nbsp;</p>
+```{r}
+# Measures of predicted classes for NB model on testing data:
+#============================================================
+predmodel_test_nb = predict(nb_fit, newdata = test_set[ ,-10])
+table(predicted = predmodel_test_nb, observed = test_set$wine_classe)
+confusionMatrix(predmodel_test_nb, test_set$wine_class,
+                mode = "everything", positive = "red")
+```
+**The naïve_Bayes algorithm** is one of the most efficient supervised learning algorithms for data mining. However, it is consider as a simple classifier and it is called “naïve” because it utilizes Bayes theorem founded on Bayes’ Rule, that simplifies the probabilities of the predictor values by strongly assuming that all of the predictors are conditionally independent from each other with regard to the class which means that the effect of a predictor value on a given class is independent of the values of the other predictors. In real world practical applications, this assumption is often violated and it is not realistic because predictors are often closely related (@kuhn2013applied). Namely, Bayes’ Rule provides a strong tool to answer the question that based on the predictors that we are analyzing what is the probability that the outcome will be class K for example, with this equation:$$\mathrm{P}(Y = K \mid X) = \frac{P(X|Y = K)*P(Y)}{P(X)}$$
+
+$\mathrm{P}(Y = K \mid X)$ is posterior probability of the class, $\mathrm{P}(X|Y = K)$ is conditional probability, $\mathrm{P}(Y)$ is the prior  probability of the outcome, $\mathrm{P}(X)$ is the probability of the predictor values.
+
+Class probabilities are created and the predicted class is the one associated with the largest class probability. To produce the class probability $\mathrm{P}(X|Y = K)$ for the first class, two conditional probability values will be determined for predictors A and B then multiplied together to calculate the overall conditional probability for the class. For probability of the predictor values (X), everything is the same, except the probabilities for predictors A and B would be determined from the entire training set for both classess. If we visualize distribution of predictors and they are overlapping, it’s unlikely that they will be independent, (@witten2002data). When the correlation between the predictors is very strong, then is almost unlikely to have a new sample. But if we use the assumption of independence this probability will be overestimated. This model accepts that not all of the predictors to be included in predicting probabilites due to the independence assumption.
+
+The naive_Bayes classification was easily performed with *naive_bayes()* from naivebayes package (@R-naivebayes) which output are tables with class conditional probablities for each predictor (the mean and standard deviation of the normal distribution for each predictor in each class) and prior probabilities. The classifications was performed on train and test datasets with *predict()* containing argument "class". Classification metrics were calculated with a *model_classification()* created function according the parameters of confusion matrix and error classification rate was estimated in both data subsets.
+<p>&nbsp;</p>
+**b) LDA Model**
+<p>&nbsp;</p>
+```{r}
+# Build LDA Model:
+#=================
+lda_fit <- lda(train_set$wine_classe~ fixed_acidity + volatile_acidity + citric_acid + residual_sugar + chlorides
+               + density + pH + sulphates + alcohol, data = train_set[, -10])
+lda_fit
+```
+<p>&nbsp;</p>
+**Measures of predicted classes for LDA model on training data**
+<p>&nbsp;</p>
+```{r}
+# Measures of predicted classes for LDA model on training data:
+#==============================================================
+predmodel_train_lda = predict(lda_fit, data = train_set[ ,-10])
+predmodel_train_lda = predict(lda_fit, data = train_set[ ,-10])
+# predmodel_train_lda$x[,1] # contains the values for the first discriminant function
+```
+
+```{r}
+table(predicted = predmodel_train_lda$class, observed = train_set$wine_classe)
+ confusionMatrix(predmodel_train_lda$class, train_set$wine_classe,
+                mode = "everything", positive = "red")
+```
+<p>&nbsp;</p>
+**Measures of predicted classes for LDA model on testing data**
+<p>&nbsp;</p>
+```{r}
+# Measures of predicted classes for LDA model on testing data:
+#============================================================
+predmodel_test_lda = predict(lda_fit, newdata = test_set[ ,-10])
+```
+
+```{r}
+table(predicted = predmodel_test_lda$class, observed = test_set$wine_classe)
+confusionMatrix(predmodel_test_lda$class, test_set$wine_classe,
+                mode = "everything", positive = "red") 
+```
+**The Linear Discriminant Algorithm:** uses linear combinations of predictors to predict the class of a given observation. First assumption is that the predictor variables (p) are normally distributed, thus the algorithm is very sensitive to outliers and to imbalanced class frequencies. The second assumption is about homoscedasticity that means the classes have identical variances acros predictor variables (for univariate analysis, p = 1) or identical covariance matrices (for multivariate analysis, p > 1). The final assumption is about the absence of multicollinearity that means if the predictor variables are correlated, the predictive ability will decrease (@mayor2015learning). The purpose of LDA in this analysis is to find the linear combinations of the original variables (the 11 chemical concentrations) that gives the best possible separation between the groups (wine types: "red" or "white") in our dataset. 
+
+The LDA was easily performed with *lda()* from MASS package (@R-MASS) which output contains: prior probabilities of groups, group means and coefficients of linear discriminants. The classifications was performed on train and test datasets with *predict()* in the same way as with naive_Bayes algorithm. Coefficients of linear discriminants and group means were analyzed to estimate the importance of predictors.
+
+
+<p>&nbsp;</p>
+**c) QDA Model**
+<p>&nbsp;</p>
+
+```{r}
+# Build QDA Model:
+#=================
+
+qda_fit <- qda(train_set$wine_classe~ fixed_acidity + volatile_acidity  +
+                 residual_sugar + density +
+                 pH + alcohol + sulphates + citric_acid + chlorides, data = train_set[ ,-10])
+qda_fit
+```
+<p>&nbsp;</p>
+**Measures of predicted classes for QDA model on training data**
+<p>&nbsp;</p>
+```{r}
+# Measures of predicted classes for QDA model on training data:
+#===============================================================
+predmodel_train_qda = predict(qda_fit, data = train_set[ ,-10], type = "class")
+table(predicted = predmodel_train_qda$class, observed = train_set$wine_classe)
+confusionMatrix(predmodel_train_qda$class, train_set$wine_classe,
+                mode = "everything", positive = "red")
+```
+<p>&nbsp;</p>
+**Measures of predicted classes for QDA model on testing data**
+<p>&nbsp;</p>
+```{r}
+# Measures of predicted classes for QDA model on testing data:
+#=============================================================
+predmodel_test_qda = predict(qda_fit, newdata = test_set[ ,-10])
+table(predicted = predmodel_test_qda$class, observed = test_set$wine_classe)
+confusionMatrix(predmodel_test_qda$class, test_set$wine_classe,
+                mode = "everything", positive = "red")
+```
+**Quadratic Discriminant Analysis (QDA)**: is more flexible than LDA because it does not assumes the equality of variance and covariance, therefore, the covariance matrix is different for each class. If the data can be discriminated using a quadratic function, we can use *qda()* instead of *lda()*. QDA is recommended if the training set is very large, so that the variance of the classifier is not a major issue (@irizarry2019introduction). It can be computed using *qda()* for MASS package in exactly the same as *lda()*.
+
+<p>&nbsp;</p>
+### Analysis and Results
+<p>&nbsp;</p>
+**Principal Component Analysis:** the goal of PCA was to find the best low-dimensional representation of the variation in a multivariate wine dataset. A principal component analysis of the "wine_data" extracted eleven components (with eigenvalues of 3.0298686, 2.4938260, 1.5563470, 0.9705521, 0.7198749, 0.6073177, 0.5231588, 0.5015103, 0.3370240, 0.2276958, 0.0328308 respectively). We examined the eigenvalues to determine the number of principal components to be retained. The first seven components explain 90.01% of the total variance, and the rest of the components up to 11 account for only trivial variance of 9.99%. An alternative criterion that can be used to check the obtained results is to retain enough components so the cumulative sum of proportion of variance explained equals to minimal value or cut off point >= 90%. The PCA output confirmed that cumulative sum of proportion of variance explained demonstrates that the cumulative percentage of variance accounted for by components 1, 2, 3, 4, 5, 6 and 7 is 90.01%, as a result, we have to retain all of the first seven components. By applying PCA to the 11-dimensional space of the predictors, we can see that the first three principal components explain 64.36% of total variance in the "wine_data" which is acceptable large percentage. In addition, first three components have eigenvalues greater than 1 that can be used as another cutoff point to retain principal components because an eigenvalue greater than 1 indicates that those components account for more variance than accounted by one of the original variables in standardized data.
+
+The variable correlation plot (Fig 1) demonstrates clearly that first and second principal components separate red from white wine observations very well. First component separates pH, fixed acidity, chlorides, sulfates, violatile acidity, density from residual sugar, total sulfur dioxide free sulfur dioxide and alcohol. The second component separates alcohol from total sulfur dioxide, free sulfur dioxide, chlorides, fixed acidity, volatile acidity and density. Examination of the correlation plot demonstrating the most contributing variables to the components (Fig 3) complements and refines this interpretation because the contributions suggest that component 1 essentially contrasts volatile acidity, fixed acidity, pH and chlorides with total sulfur dioxide, free sulfur dioxide and residual sugar and that component 2 essentially contrasts alcohol with density. The quality of representation of all variables (square cosine) on factor map shown on Fig 2 demonstrates that component 1 contributes highly to total sulfur dioxide, free sulfur dioxide and volatile acidity, while component 2 contributes most to density and alcohol. It appears that second principal component represents its unique physical properties like density, while first principal component represents its chemical properties like concentration of total and free sulfur dioxide additives used as  antiseptic during fermentation process and its own sugar levels.
+```{r, fig.width = 9, fig.height = 6, fig.cap=" Fig 1: Biplot of individuals (class labels) and variables on Principal Components 1 and 2." }
+# Variable Correlation Plots with class labels:
+#--------------------------------------------
+ind_var <- fviz_pca_biplot(pca_wine, label = "var", habillage = wine_classe,
+                           palette = c("#BB0C00", "#E7B800"),
+                           addEllipses = TRUE, ellipse.level = 0.95,
+                           legend.title = "Wine Type")
+ggpubr::ggpar(ind_var,
+              title = "Principal Component Analysis",
+              subtitle = "Correlations of the variables and class labels (red and white wine type) with PCA Components 1 and 2",
+              caption = "Data source: UCI Maschine Learning Repository,
+              https://archive.ics.uci.edu/ml/datasets/wine",
+              xlab = "PC1", ylab = "PC2",
+              legend.title = "Wine Type", legend.position = "top",
+              ggtheme = theme_gray())
+```
+
+<p>&nbsp;</p>
+**Correlation Plots**
+<p>&nbsp;</p>
+# {.tabset}
+## Graph 1
+```{r, fig.width = 9, fig.height = 6, fig.cap=" Fig 2: The quality of representation of variables on all Principal Components on factor map."}
+# Correlation plot of cos2 of variables:
+#----------------------------------------
+plot1 <- corrplot(var$cos2, is.corr = FALSE) # corr. plot for cos2
+```
+
+## Graph 2
+```{r,fig.width = 9, fig.height = 6, fig.cap=" Fig 3: The most contributing variables for each of the Principal Components."}
+# Correlation plot for the most contributing variables on all PCs:
+#----------------------------------------------------------------
+corrplot(var$contrib, is.corr = FALSE) # corr. plot for variable contribution
+```
+#
+In addition, most of the components show high square cosine values with the first three components that means they are positioned close to the circumference of the correlation circle. The closer a variable is to the circle of correlations, the better we can reconstruct these variables from the first three components and *vice versa*. Thus, we decided to retain only the first three components for further cluster analysis.
+
+**Cluster Analysis:** we use this study to demonstrate the ability of PCA to extract variables relevant to built the cluster structure. As we discussed previously, hierarchical clustering analysis with single, average, complete and Ward's 2 linkage methods were performed using the first three principal components whose eigenvalues exceeded 1 and whose cumulative proportion of variance was aproximatelly 64.36% of total variance, instead of the original predictor variables. Therefore, the hierarchical clustering performed with that amount the data variance resulted into four dendrograms as compact visualizations of final dissimilarity matrices measured with four different agglomerative methods of hierarchical clustering. The clustering solution that depends on Ward’s 2 linkage method outperformed other hierarchical clustering methods. The resulted Ward’s 2 dendrogram suggests to group the observations into two prominent clusters with number of observations within the clusters perfectly equivalent to the number of observations that belong to each of the two classes known, as class labels (“red” and “white”) according to the ground truth except for few obervations being misclassified. It contains two clusters as two branches that occured at about the same horizontal distance (@brentari2016clustering). The outliers are fused rather arbitrarily at higher distance. 
+```{r, fig.show='hide'}
+# Plot dendrograms with Single, Complete, Average and Ward’s 2 Linkage method together:
+#=========================================================================================
+opar <- par(mfrow = c(2, 2))
+plot(wine_sl, xlab = "", sub = "", cex = 0.6, hang = -1, col = "red3", labels = FALSE,
+     main = "Cluster Dendrogram with Single Linkage Method") # plot the dendogram with Single-Linkage method 
+plot(wine_al, xlab = "", sub = "", cex = 0.6, hang = -1, col = "red3", labels = FALSE,
+     main = "Cluster Dendrogram with Average Linkage Method") # plot the dendogram with Single-Linkage method 
+plot(wine_cl, xlab = "", sub = "", cex = 0.6, hang = -1, col = "turquoise3", labels = FALSE,
+     main = "Cluster Dendrogram with Complete Linkage Method") # plot the dendrogram with Complete-Linkage method
+plot(wine_wl, xlab = "", sub = "", cex = 0.6, hang = -1, col = "maroon3", labels = FALSE,
+     main = "Cluster Dendrogram with Ward 2 Linkage Method") # plot the dendrogram with Ward's 2 Linkage method
+par(opar)
+```
+
+```{r, fig.width = 7, fig.height = 7, fig.cap="Ward's 2 Dendrogram on scores along PC1-PC3 of wine data 'winequality.csv' "}
+# Plot cluster dendrograms with Ward's 2 Linkage method along with class labels:
+#==============================================================================
+dendrogram_wl_wine <- as.dendrogram(wine_wl) %>%
+  set("branches_lty", 1) %>%
+  set("branches_k_color", value = c("black", "red"), k = 2)
+  colours_to_use <- as.numeric(wine_classe)
+  colours_to_use <- colours_to_use[order.dendrogram(dendrogram_wl_wine)]
+  labels_colors(dendrogram_wl_wine) <- colours_to_use
+  dend_list_wl <- as.character(wine_classe)
+  labels(dendrogram_wl_wine) <- dend_list_wl[order.dendrogram(dendrogram_wl_wine)]
+  plot(dendrogram_wl_wine, main = "Cluster Dendrogram with Ward 2 Linkage Method", ylab = "Height")
+dendrogram_wl_rect_wine <- rect.dendrogram(dendrogram_wl_wine, k = 2, lty = 5, lwd = 0, x = 1, col = rgb(0.1, 0.2, 0.4, 0.1))
+  legend("topright",
+        legend = c("Red Wine","White Wine"),
+        col = c("black", "red"),
+        title = "Cluster Labels",
+        pch = c(20,20), bty = "n", pt.cex = 1.5, cex = 0.8,
+        text.col = c("black"), horiz = F, inset = c(0,0.1))
+```
+
+In general, Ward's linkage method assumes that agglomeration between two clusters is such that within class-variance of the partition obtained is minimal. The initial cluster distance between observations is defined as squared Euclidean distance. This method measures how much the sum of squares of variance will increase when the pair will merge. With hierarchical clustering, the sum of squares starts out at zero (because each observation is in its own cluster) and then grows as clusters are merging. Ward's method keeps this growth as small as possible. As such, Ward's minimum variance method is very related to PCA because as we know, PCA reduced the dimensionality of "wine_data" into three principal components and amount of variance retained by each component is expressed with eigenvalues. Since both methods are trying to maintain minimal variance, Ward's algorithm revealed the two types of wine as clusters in a completely unsupervised way from PCA loading vectors of only three components.
+
+**Supervised Classification Analysis**: LDA is sensitive to near zero variance and collinear predictors, thus, we have excluded free sulphur dioxide and total sulphur dioxide from classification analysis because of strong positive correlation coefficient of 0.8 as confirmed with correlation plots that might affect accuracy of LDA and naive_Bayes classifiers. Inspection of box plots and assessment of normality with Q-Q plots demonstrated that data do not appear to be approximately normal, with significant number of highest value observations deviating from a straight diagonal line, especially significant for chlorides, sulphates, residual sugar, citric acid and violatile acidity. Despite that fact, none of the transformations were applied.
+
+Imbalanced class frequencies were known apriori classification as 1280 observations for "red" wine and 3919 observations for "white" wine in the training data. Instead of having the model deal with the imbalance, we attempted to balance the class frequencies with  a method called down sampling the majority class, "white type" by removing observations at random until the dataset is balanced. Readjusting class frequencies resulted into equal number of 1280 observations for "red" and "white" wine. 
+The metrics of classification performances of classifiers are presented in the table below. As expected, LDA is performing well on both train and test data. It has only two false negatives for white type and 7 false positives for red type on train data. QDA has high accuracy, but it is misclassifying red type with 42 false positives, so it is overfitting here. As well, to take into consideration that LDA creates linear decision boundries, while QDA creates quadratic decision boundries. In summary, as we can notice naive_Bayes did not get the chance to show its strengths and it is the worst performing for this data.  
+```{r}
+# Calculate metrics performance of the models:
+#=============================================
+metrics_classification = function(predicted, observed){
+  (confusion_table = table(predicted, observed)) # create the confusion matrix
+  TP = confusion_table[1,1]
+  TN = confusion_table[2,2]
+  FN = confusion_table[2,1]
+  FP = confusion_table[1,2]
+  accuracy = round((TP + TN) / sum(TP,FP,TN,FN), 2)
+  error_rate = round((FP + FN) / sum(TP,FP,TN,FN),2)
+  precision = round(TP / sum(TP, FP), 2)
+  recall = round(TP / sum(TP, FN), 2)
+  sensitivity = round(TP / sum(TP, FN), 2)
+  specificity = round(TN / sum(TN, FP), 2)
+  f1_score = round((2 * precision * sensitivity) / (precision + sensitivity), 2)
+  metrics = c(accuracy, error_rate, precision, recall, sensitivity, specificity, f1_score)
+  names(metrics) = c("Accuracy", "Error_Rate", "Precision", "Recall", "Sensitivity", "Specificity", "F1 score")
+  return(metrics)
+}
+# Calculate model performance metrics on training data:
+#=======================================================
+lda_train <- metrics_classification(predmodel_train_lda$class,train_set$wine_classe)
+qda_train <- metrics_classification(predmodel_train_qda$class, train_set$wine_classe)
+nb_train <- metrics_classification(predmodel_train_nb, train_set$wine_classe)
+
+# Calculate model performance metrics on testing data:
+#====================================================
+lda_test <- metrics_classification(predmodel_test_lda$class,test_set$wine_classe)
+qda_test <- metrics_classification(predmodel_test_qda$class, test_set$wine_classe)
+nb_test <- metrics_classification(predmodel_test_nb, test_set$wine_classe)
+```
+
+```{r, results="hide"}
+# Table for performance metrics on train data of 3 classifiers:
+#=============================================================
+col_names <- c("Parameters", "LDA", "QDA", "NB")
+parameters <- c("Accuracy", "Error_Rate", "Precision", "Recall", "Sensitivity", "Specificity", "F1 score")
+metrics_df_train <- cbind(parameters, lda_train, qda_train, nb_train)
+colnames(metrics_df_train) <- col_names
+row.names(metrics_df_train) <- NULL
+set.alignment("left", row.names = "left")
+pander(metrics_df_train, style = 'rmarkdown',
+       caption = " Performances metrics of naive_Bayes, LDA and QDA classifiers on train wine data", split.table = Inf)
+
+# Table for performance metrics on test data of 3 classifiers:
+#============================================================
+col_names <- c("Parameters", "LDA", "QDA", "NB")
+parameters <- c("Accuracy", "Error_Rate", "Precision", "Recall", "Sensitivity", "Specificity", "F1 score")
+metrics_df_test <- cbind(parameters, lda_test, qda_test, nb_test)
+colnames(metrics_df_test) <- col_names
+row.names(metrics_df_test) <- NULL
+set.alignment("left", row.names = "left")
+pander(metrics_df_test, style = 'rmarkdown',
+       caption = "Performances metrics of naive_Bayes, LDA and QDA classifiers on test wine data", split.table = Inf)
+```
+
+```{r, results = 'asis'}
+# Overall metrics performance of 3 classifiers on train and test data:
+#=====================================================================
+metrics_df_train <- as.data.frame(metrics_df_train)
+Parameters <- metrics_df_train$Parameters
+metrics_df <- merge(metrics_df_train, metrics_df_test, by = "Parameters")
+col_names <- c("Parameters", "LDA.trn", "QDA.trn", "NB.trn", "LDA.tst", "QDA.tst", "NB.tst")
+colnames(metrics_df) <- col_names
+row.names(metrics_df) <- NULL
+set.alignment("left", row.names = "left")
+pander(metrics_df, style = 'rmarkdown',
+       caption = "Performances metrics of naive_Bayes, LDA and QDA classifiers on train and test wine data", split.table = Inf)
+```
+
+In practice, it works very well with large number of predictors, even with very small sample size. Also note that, measured prevalence of positive class, (red") is 0.50 for all the classifiers on both train and test data.
+
+Examining the coefficients of the linear discriminant function (there is only one LD) provided an understanding of the relative importance of predictors. The top 5 predictors based on absolute magnitude of discriminant function coefficient are: chlorides(-4.7544), volatile acidity (-2.2979), sulphates (-0.9652), fixed acidity (0.1516) and residual sugar (0.3767). Here, fixed acidity and volatile acidity are inveresly related. Analysis of mean concentrations of these substances by classes revealed that there is a significantly low difference in concentrations for chlorides of only 0.04 g/dm3 between classes, 0.16 g/dm3 for sulphates and 0.24 g/dm3 for volatile acidity. Significantly higher difference in group means concentrations is noticed for fixed acidity of 1.5 g/dm3 and 3.75 g/dm3 for residual sugar. White wine contains 6.3 g/dm3 residual sugar and 6.9 g/dm3 fixed acidity, while red wine contains 2.6 g/dm3 sugar and 8.3 g/dm3 fixed acidity. In conclusion, white wine is more sweet but less acidic while red wine is less sweet but more acidic.
+
+<p>&nbsp;</p>
+### Conclusion
+<p>&nbsp;</p>
+The wine dataset containing 6497 observations in total and 11 variables describing physicochemical properties of the wine with class label "quality" was created by joining red wine dataset with 1599 observations and white wine datasets with 4898 observations. We have replaced "quality" with new class label called "wine_type", thefore, our newly created wine dataset have 11 chemical concentrations describing wine samples from two different types of wine: "red" or "white". We eliminated the fundamental imbalance issue that plagues model training by balancing the frequencies of class labels on training data. In addition, we used balanced class labels in the same way in cluster analysis, to label the observation of resulted dendrograms. We carried out PCA to investigate whether we can capture most of the variation between wine samples using a smaller number of new variables (principal components), where each of these new variables is a linear combination of all or some of the 11 chemical concentrations. As well, we wanted to demonstrate whether extracted principal componenets as the best low dimensional representation of the multivariate wine dataset are relevant to reconstruct the cluster structure built by agglomerative methods of hierarchical clustering. Generative supervised classification methods (naive_Bayes, LDA and QDA) were applied to predict the wine type based on the concentrations of 11 predictors with purpose to select the best performing classifier according to the accuracy and classification error rate for train and test data. 
+
+We have shown that variation between wine samples was captured by three principal components whose cumulative proprtion of variance was aproximatelly 64.36% of total variance that was enough to re-built the cluster structure. Observations belonging to each of the two classes known, as class labels according to the ground truth were perfectly captured as two prominent groups in the Ward's 2 dendrogram. At the initial stages of exploratory data analysis, this type of information can be undeniably treasured when the information about class labels is nonexistent at all (@campello2013density). 
+
+Summarizing the supervised classification results, we demonstrated that all of the three classifiers performed succesfully on wine data. Nevertheless, LDA showed its strengths because when we have more observations than the number of predictors, then the covariance matrix is invertible, and the data can be accurately divided by a linear hyperplane, then LDA produces a predictively satisfying model. LDA also provided some understanding of the underlying relationships between predictors and the output variable. While white wine has a higher concentraion of sugar level, red wine has higher concentration of fixed acidity. 
+
+<p>&nbsp;</p>
+### References
+
