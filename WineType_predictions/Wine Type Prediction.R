@@ -1,6 +1,5 @@
 
 # title: "Wine Type Prediction With Supervised And Unsupervised Learning"
-# project: Capstone Data Mining
 # author: "Biljana Simonovikj"
 # date: "06/05/2020"
 
